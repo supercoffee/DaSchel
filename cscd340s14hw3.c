@@ -22,8 +22,16 @@ int main(){
 
 void show_history(List* history){
 
-	list_print(history, toString);
-	printf("\n");
+	Iterator* iter = list_iterator(history);
+	int number = 1;
+
+	while(iter_hasNext(iter)){
+
+		printf("%d %s \n", number++, (char*)iter_next(iter));
+
+	}
+
+	iter_destroy(iter);
 
 }
 
@@ -74,7 +82,11 @@ int interp(List * history){
 			number in the list history, then we can pull out that item
 			from history to execute it again.
 		*/
-		if(result && result < list_size(history)){
+		if(result){
+			//invalid command number.
+			if(commandNo > list_size(history) && commandNo < 1){
+				return -1;
+			}
 			/* 	the history list is 1 based indexing
 			 	the linked list is 0 based, 
 			 	therefore subtract one. 
