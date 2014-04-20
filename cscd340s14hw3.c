@@ -46,6 +46,7 @@ int interp(List * history){
 
 	char buf[256];
 	char * copy;
+	int result = 0;
 
 	printf("DaSchel $ ");
 
@@ -74,7 +75,7 @@ int interp(List * history){
 
 		char * bufptr = buf + 1;
 		int commandNo;
-		int result = sscanf(bufptr, "%d", &commandNo);
+		result = sscanf(bufptr, "%d", &commandNo);
 		printf("command #%d\n", commandNo);
 
 		/*
@@ -100,6 +101,16 @@ int interp(List * history){
 
 	if(strcmp(buf, "history") == 0){
 		show_history(history);
+		return 1;
+	}
+
+	if(strncmp(buf, "cd ", 3)){
+		char * temp = buf + 3;
+		result = chdir(temp);
+		if(result){
+			printf("Invalid directory: %s\n", temp);
+			return -1;
+		}
 		return 1;
 	}
 
