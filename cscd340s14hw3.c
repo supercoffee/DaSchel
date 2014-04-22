@@ -1,4 +1,3 @@
-
 #include "cscd340s14hw3.h"
 
 char * toString(void * data){
@@ -12,7 +11,7 @@ int main(){
 
 	while(interp(history));
 
-	//save history before exit
+	// //save history before exit
 	save_history(history, HISTORY_FILE);
 
 	list_destroy(history);
@@ -104,7 +103,7 @@ int interp(List * history){
 		return 1;
 	}
 
-	if(strncmp(buf, "cd ", 3)){
+	if(strncmp(buf, "cd ", 3) == 0){
 		char * temp = buf + 3;
 		result = chdir(temp);
 		if(result){
@@ -148,10 +147,123 @@ int interp(List * history){
 
 }
 
-int execute(const char * command){
+int execute(const char * str){
 
-	printf("Executing %s\n", command);
+	printf("Executing %s\n", str);
 
+	int argc;
+	//test for pipes
+	char ** pipes = makeargs(str, "|", &argc);
+
+	/*
+		No pipes in this command, or at least not in a valid way. 
+	*/
+	if(argc == 1){
+
+		printf("No pipes in %s\n", str);
+
+		if(strchr(str, '>') || strchr(str, '<')){
+
+			char * file;
+			char * command;
+
+			int direction = redirect(str, &command, &file);
+
+			//Abort. No redirect actually exists here.
+			if(direction == -1){
+
+			}
+
+			//stdin redirect
+			else if(direction == 0){
+
+			}
+
+			//stdout redirect
+			else if(direction == 1){
+
+			}
+
+		} 
+
+
+	}
+
+	/*
+		Put that in your pipe and smoke it!!
+	*/
+	else{
+
+		printf("Found %d commands in %s\n", argc, str);
+
+	}
+
+	freeargs(&pipes);
+
+}
+
+
+int redirect(const char * s, char ** command, char ** file){
+
+
+	return -1;
+}
+
+void freeargs(char *** args){
+
+	int i;
+	for(i = 0; (*args)[i] != NULL; i++){
+		free((*args)[i]);
+	}
+
+	free(*args);
+	*args = NULL;
+
+}
+
+
+char ** makeargs(const char * s, const char * delim, int * argc){
+
+	
+	int i, tokenCount;
+	char buf[256];
+	char * token;
+	List * tempList = list_create();
+	char ** argv;
+
+	char * dup = strdup(s);
+
+	//this is needed so we can free the allocation at the end
+	char * dup2 = dup;
+
+	strip(dup);
+
+	while((token = strtok(dup, delim)) != NULL){
+		dup = NULL;
+		char * temp = (char*)calloc(strlen(token) +1, sizeof(char));
+
+		strcpy(temp, token);
+
+		list_add(tempList, temp);
+	}
+
+	tokenCount = list_size(tempList);
+	*argc = tokenCount;
+
+	argv = (char**)calloc(tokenCount +1, sizeof(char*));
+
+	for(i = 0; i < tokenCount; i++){
+
+		char * temp = list_pop(tempList);
+
+		argv[i] = temp;
+
+	}
+	
+	list_destroy(tempList);
+	free(dup2);
+
+	return argv;
 }
 
 List * load_history(char * filename){

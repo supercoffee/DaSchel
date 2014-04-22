@@ -24,5 +24,17 @@ void show_history(List* history);
 
 int execute(const char * command);
 
+char ** makeargs(const char * s, const char * delim, int * argc);
+
+void freeargs(char *** args);
+
+
+/*
+	Returns 0 to redirect stdin
+	return 1 to redirect stdout
+	returns -1 if neither.
+*/
+int redirect(const char * s, char ** command, char ** file);
+
 
 #endif
