@@ -140,6 +140,11 @@ int interp(List * history){
 			list_add(history, copy);
 		}
 
+		while(list_size(history) > 200){
+			char * remove = list_dequeue(history);
+			free(remove);
+		}
+
 
 	}
 
@@ -169,57 +174,80 @@ int execute(const char * str){
 		printf("No pipes in %s\n", str);
 		#endif
 
-		if(strchr(str, '>') || strchr(str, '<')){
 
-			char * file;
-			char * command;
 
-			int direction = redirect(str, &command, &file);
+		char * file = NULL;
+		char * command = NULL;
 
-			/*	Abort. No redirect actually exists here.
-			 	This is most likely because the redirect 
-				was not used in a semantically correct way.
-			*/	
-			if(direction == -1){
+		int direction = redirect(str, &command, &file);
 
-				return -1;
-			}
+		// 	Abort. No redirect actually exists here.
+		//  	This is most likely because the redirect 
+		// 	was not used in a semantically correct way.
+		
+		if(direction == -2)
+			goto release;
+
+		char ** commandArgs = makeargs(command, " ", &argc);
+
+		pid_t pid = fork();
+
+		/*
+			this is the child. we can configure the
+			redirects down here before exec'ing the
+			next proc. 
+		*/
+		if(!pid){
 
 			int filedesc;
 
 			//stdin redirect
 			if(direction == 0){
 				filedesc = open(file, O_RDONLY);
+				#if DEBUG
+					printf("filedesc %d\n", filedesc);
+				#endif
+				if(dup2(filedesc, 0) < 0){
+					#if DEBUG
+					printf("Couldn't dup stdin\n");
+					#endif
+					exit(-1);
+				}
 			}
- 
+
 			//stdout redirect
 			else if(direction == 1){
-				filedesc = open(file, O_WRONLY);
-			}
-		} 	
-
-		/*
-			No pipes
-			No redirects, 
-			just plain old command execution.
-		*/
-		else{
-
-			char ** command = makeargs(str, " ", &argc);
-			pid_t pid = fork();
-			if(!pid){
-
-				if(execvp(command[0], command)){
+				//set perms to rw-r-----
+				filedesc = open(file, O_WRONLY | O_CREAT, 
+					 S_IRUSR | S_IWUSR | S_IRGRP | S_IROTH);
+				#if DEBUG
+					printf("filedesc %d\n", filedesc);
+				#endif
+				if(dup2(filedesc, 1) < 0){
+					#if DEBUG
+					printf("Couldn't dup stdout\n");
+					#endif
 					exit(-1);
-				}	
-			}
-			else{
-				wait(NULL);
+				}
 			}
 
-			freeargs(&command);
+			if(execvp(commandArgs[0], commandArgs)){
+				exit(-1);
+			}	
 
 		}
+		else{
+			wait(NULL);
+		}
+
+		freeargs(&commandArgs);
+
+		release:
+		free(command);
+		free(file);
+
+
+		
 
 
 	}
@@ -347,8 +375,70 @@ void pipe_to(List * commandList,  int argc){
 */
 int redirect(const char * s, char ** command, char ** file){
 
+	int result;
+	char * copy  = strdup(s);
+	//backup because we are going to set copy to null during
+	// strtok calls
+	char * copy2 = copy;
+	char * token = NULL;
+	char * temp = NULL;
 
-	return -1;
+	if(strchr(copy, '<')){
+		temp = strtok(copy, "<");
+		if(temp)
+			*command = strdup(temp);
+		temp = strtok(NULL, "<");
+		if(temp)
+			*file = strdup(temp);
+
+		result = 0;
+	}
+	else if(strchr(copy, '>')){
+		temp = strtok(copy, ">");
+		if(temp)
+			*command = strdup(temp);
+		temp = strtok(NULL, ">");
+		if(temp)
+			*file = strdup(temp);
+		result = 1;
+	}
+	else{
+		*command = strdup(s);
+		result = -1;
+	}
+
+	free(copy2);
+
+	if(result == 0 || result == 1){
+		if(!*file){
+			result = -2;
+		}
+		else{
+			lstrip(*file);
+		}
+	}
+
+	#if DEBUG
+	printf("Command: %s  file: %s\n", *command, *file);
+	#endif
+
+	return result;
+}
+
+/*
+	If the first char is a space, 
+	all the characters in the string are shifted 
+	to the left by one place.  
+*/
+void lstrip(char * s){
+	while(*s == ' ' || *s == '\t'){
+		int length = strlen(s);
+		int i;
+		for(i = 0; i < length; i++){
+			s[i] = s[i +1];
+		}
+	}
+
 }
 
 void freeargs(char *** args){
