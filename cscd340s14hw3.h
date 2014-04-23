@@ -18,7 +18,7 @@ int save_history(List * history, char * filename);
 
 void strip(char * buf);
 
-int interp(List * history);
+int interp(List * history); 
 
 void show_history(List* history);
 
@@ -35,6 +35,8 @@ void freeargs(char *** args);
 	returns -1 if neither.
 */
 int redirect(const char * s, char ** command, char ** file);
+
+void pipe_to(List * commands, int argc);
 
 
 #endif

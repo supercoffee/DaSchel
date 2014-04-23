@@ -1,5 +1,7 @@
 #include "cscd340s14hw3.h"
 
+#define DEBUG 0
+
 char * toString(void * data){
 	return (char*)data;
 }
@@ -75,7 +77,10 @@ int interp(List * history){
 		char * bufptr = buf + 1;
 		int commandNo;
 		result = sscanf(bufptr, "%d", &commandNo);
+
+		#if DEBUG
 		printf("command #%d\n", commandNo);
+		#endif
 
 		/*
 			If the result is not 0 and the result is some valid 
@@ -149,7 +154,7 @@ int interp(List * history){
 
 int execute(const char * str){
 
-	printf("Executing %s\n", str);
+	// printf("Executing %s\n", str);
 
 	int argc;
 	//test for pipes
@@ -160,7 +165,9 @@ int execute(const char * str){
 	*/
 	if(argc == 1){
 
+		#if DEBUG
 		printf("No pipes in %s\n", str);
+		#endif
 
 		if(strchr(str, '>') || strchr(str, '<')){
 
@@ -169,22 +176,50 @@ int execute(const char * str){
 
 			int direction = redirect(str, &command, &file);
 
-			//Abort. No redirect actually exists here.
+			/*	Abort. No redirect actually exists here.
+			 	This is most likely because the redirect 
+				was not used in a semantically correct way.
+			*/	
 			if(direction == -1){
 
+				return -1;
 			}
+
+			int filedesc;
 
 			//stdin redirect
-			else if(direction == 0){
-
+			if(direction == 0){
+				filedesc = open(file, O_RDONLY);
 			}
-
+ 
 			//stdout redirect
 			else if(direction == 1){
+				filedesc = open(file, O_WRONLY);
+			}
+		} 	
 
+		/*
+			No pipes
+			No redirects, 
+			just plain old command execution.
+		*/
+		else{
+
+			char ** command = makeargs(str, " ", &argc);
+			pid_t pid = fork();
+			if(!pid){
+
+				if(execvp(command[0], command)){
+					exit(-1);
+				}	
+			}
+			else{
+				wait(NULL);
 			}
 
-		} 
+			freeargs(&command);
+
+		}
 
 
 	}
@@ -194,15 +229,122 @@ int execute(const char * str){
 	*/
 	else{
 
+		#if DEBUG
 		printf("Found %d commands in %s\n", argc, str);
+		#endif
+
+		int commandcount;
+		List * commandsToPipe = list_create();
+
+		int i;
+		for(i = 0; i < argc; i++){
+
+			list_add(commandsToPipe, makeargs(pipes[i], " ", &commandcount));
+
+		}
+
+		pipe_to(commandsToPipe, argc);
+
+
+		/*
+			The normal list destroy method doesn't work here
+			because we have char **.  Need to implement 
+			a function that can free any type of data from the
+			list. 
+		*/
+		for(i = 0; i < argc; i++){
+
+			char ** temp = list_pop(commandsToPipe);
+
+			freeargs(&temp);
+
+		}		
+
+		list_destroy(commandsToPipe);
 
 	}
 
 	freeargs(&pipes);
-
 }
 
 
+void pipe_to(List * commandList,  int argc){
+
+	pid_t pid;
+
+	int status;
+
+	int cmdNo = 0, i;
+
+	int numpipes  = argc -1;
+
+	int pipefds[2* numpipes];
+
+	/*
+		Set up all the pipes that will be used ahead
+		of time. 
+	*/
+	for(i = 0; i < numpipes; i++){
+		if(pipe(pipefds + i*2) < 0){
+			exit(-1);
+		}
+	}
+
+	i = 0;
+
+	Iterator  * commands = list_iterator(commandList);
+
+	while(iter_hasNext(commands)){
+		char ** command = (char**)iter_next(commands);
+
+		pid = fork();
+
+		if(!pid){
+
+			// not the last command
+			if(iter_hasNext(commands)){
+				dup2(pipefds[i + 1], 1);
+			}
+
+			//not the first command
+			if(i != 0){
+				dup2(pipefds[i-2], 0);
+			}
+
+			for(i = 0; i < 2 * numpipes; i++){
+				close(pipefds[i]);
+			}
+
+			/*
+				If this funtion ever returns
+				this is bad and we need to kill the
+				current proc.
+			*/	
+			if(execvp(command[0], command)){
+				exit(-1);
+			}
+		}
+
+		i += 2;
+	}
+
+	for(i = 0; i < numpipes *2; i++){
+		close(pipefds[i]);
+	}
+
+	for(i = 0; i <numpipes + 1; i++){
+		wait(&status);
+	}
+
+	iter_destroy(commands);
+
+}
+
+/*
+	Implement later.  Just needs to determine the file redirect
+	and set it to file.
+	
+*/
 int redirect(const char * s, char ** command, char ** file){
 
 
@@ -254,7 +396,7 @@ char ** makeargs(const char * s, const char * delim, int * argc){
 
 	for(i = 0; i < tokenCount; i++){
 
-		char * temp = list_pop(tempList);
+		char * temp = list_dequeue(tempList);
 
 		argv[i] = temp;
 
